@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { createEditor, BaseEditor, Descendant, Transforms, Editor, Element } from 'slate';
 import { Slate, Editable, withReact, ReactEditor } from 'slate-react';
 
-type CustomElement = { type: string; children: CustomElement[] | CustomText[] };
-type CustomText = { text: string };
+type CustomElement = { type: string | null; children: CustomElement[] | CustomText[] };
+type CustomText = { text: string, bold?: boolean };
 
 declare module 'slate' {
   interface CustomTypes {
@@ -12,6 +12,38 @@ declare module 'slate' {
     Text: CustomText;
   }
 };
+
+const CustomEditor = {
+  isBoldMarkActive(editor: Editor) {
+    const marks = Editor.marks(editor);
+    return marks ? marks.bold === true : false;
+  },
+
+  isCodeBlockActive(editor: Editor) {
+    const [match] = Editor.nodes(editor, {
+      match: n => Element.isElement(n) && n.type === 'code',
+    });
+    return !!match;
+  },
+
+  toggleBoldMark(editor: Editor) {
+    const isActive = CustomEditor.isBoldMarkActive(editor);
+    if (isActive) {
+      Editor.removeMark(editor, 'bold');
+    } else {
+      Editor.addMark(editor, 'bold', true);
+    }
+  },
+
+  toggleCodeBlock(editor: Editor) {
+    const isActive = CustomEditor.isCodeBlockActive(editor);
+    Transforms.setNodes(
+      editor,
+      { type: isActive ? null : 'code' },
+      { match: n => Element.isElement(n) && Editor.isBlock(editor, n) }
+    );
+  },
+}
 
 const initialValue: Descendant[] = [
   {
@@ -45,22 +77,13 @@ const App = () => {
       switch (e.key) {
         case '`': {
           e.preventDefault();
-          // Determine whether any of the currently selected blocks are code blocks
-          const [match] = Editor.nodes(editor, {
-            match: n => Element.isElement(n) && n.type === 'code',
-          })
-          // Toggle the block type depending on whether there's already a match.
-          Transforms.setNodes(
-            editor,
-            { type: match ? 'paragraph' : 'code' },
-            { match: n => Element.isElement(n) && Editor.isBlock(editor, n) }
-          )
+          CustomEditor.toggleCodeBlock(editor);
           break;
         }
   
         case 'b': {
           e.preventDefault();
-          Editor.addMark(editor, 'bold', true);
+          CustomEditor.toggleBoldMark(editor);
           break;
         }
       }
@@ -69,6 +92,24 @@ const App = () => {
 
   return (
     <Slate editor={editor} initialValue={initialValue}>
+      <div>
+        <button
+          onMouseDown={e => {
+            e.preventDefault();
+            CustomEditor.toggleBoldMark(editor);
+          }}
+        >
+          Bold
+        </button>
+        <button
+          onMouseDown={e => {
+            e.preventDefault();
+            CustomEditor.toggleCodeBlock(editor);
+          }}
+        >
+          Code Block
+        </button>
+      </div>
       <Editable
         placeholder='Enter some text...'
         onKeyDown={handleKeyDown}
